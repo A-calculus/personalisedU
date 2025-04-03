@@ -35,10 +35,11 @@ If you prefer to deploy manually:
 1. Create a new Web Service on Render
 2. Connect your GitHub repository
 3. Configure the following settings:
-   - Build Command: `npm install && npm run build`
+   - Build Command: `./render-build.sh`
    - Start Command: `npm start`
    - Environment: Node
    - Health Check Path: `/api/health`
+   - Node Version: 18.17.0 (or higher)
 
 ### Environment Variables
 
@@ -51,6 +52,16 @@ Make sure to set the following environment variables in Render:
 - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
 - Any other environment variables your application needs
+
+## Troubleshooting Render Deployment
+
+If you encounter issues with the Render deployment:
+
+1. Check the build logs for specific error messages
+2. Ensure all required dependencies are listed in `package.json`
+3. Verify that the `render-build.sh` script has execute permissions
+4. Make sure the Node.js version is compatible (18.17.0 or higher)
+5. Check that all environment variables are properly set in Render
 
 ## Features
 
