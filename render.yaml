@@ -2,12 +2,16 @@ services:
   - type: web
     name: personalised-u
     env: node
-    buildCommand: ./render-build.sh
-    startCommand: npm start
+    buildCommand: npm install && npm run build
+    startCommand: ./start.sh
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
     healthCheckPath: /api/health
-    autoDeploy: true 
+    autoDeploy: true
+    disk:
+      name: next-build
+      mountPath: .next
+      sizeGB: 1 
