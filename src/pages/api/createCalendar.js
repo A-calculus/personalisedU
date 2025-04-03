@@ -1,126 +1,183 @@
-// pages/api/createCalendar.js
-import fetch from 'node-fetch';
-import { writeFile } from 'fs';
-import { join } from 'path';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { getUserInfo } from './profileService.js';
 
-const SAVE_PROFILE_URL = `${process.env.VERCEL_URL}/api/saveProfile`; // Adjust this if necessary
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-export default async function handler(req, res) {
-  if (req.method === 'POST') {
-    const { chatId } = req.body;
+const MULTIAGENT_API_URL = 'https://multiagent.aixblock.io/api/v1';
 
-    if (!chatId) {
-      return res.status(400).json({ error: 'Chat ID is required' });
+// Store file deletion timers
+const fileDeletionTimers = new Map();
+
+/**
+ * Schedules deletion of a file after a specified time
+ * @param {string} filePath - Path to the file to delete
+ * @param {number} delayMs - Delay in milliseconds before deletion
+ */
+function scheduleFileDeletion(filePath, delayMs = 3600000) { // Default: 1 hour
+    // Clear any existing timer for this file
+    if (fileDeletionTimers.has(filePath)) {
+        clearTimeout(fileDeletionTimers.get(filePath));
     }
 
-    try {
-        // Fetch user information from Supabase
-      const userInfo = await getUserInfo(chatId);
-
-      // Prepare payload for the external API
-      const payload = {
-        basic_info: "example_value",
-        user_knowledge: "example_value",
-        user_objectives: "example_value",
-        program_info: "example_value",
-        user_schedule: "example_value",
-        calendar_content: "example_value",
-        webhook: "null",
-      };
-
-      // Send POST request to the external API
-      const response = await fetch('https://multiagent.aixblock.io/api/v1/execute/result/67c524b951643fd40c0d4d1f', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        return res.status(response.status).json({ error: `Failed to create calendar: ${error.message}` });
-      }
-
-      const result = await response.json();
-      const calendarContent = result.data || "No calendar content available"; // Adjust based on the actual response structure
-
-      // Generate .ics file
-      const icsFilePath = await createICSFile(calendarContent);
-
-      // Send the file to the user in Telegram
-      res.status(200).json({ message: 'Calendar created successfully', filePath: icsFilePath });
-    } catch (error) {
-        if (error.message === 'User profile not found') {
-            // If user profile is not found, call saveProfile.js with a specific message
-            await handleProfileCreation(chatId);
-        } else {
-            console.error(error);
-            res.status(500).json({ error: 'Failed to create calendar' });
+    // Set new timer
+    const timer = setTimeout(() => {
+        try {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                console.log(`🗑️ Deleted file: ${filePath}`);
+            }
+            fileDeletionTimers.delete(filePath);
+        } catch (error) {
+            console.error(`❌ Error deleting file ${filePath}:`, error);
         }
+    }, delayMs);
+
+    // Store the timer
+    fileDeletionTimers.set(filePath, timer);
+}
+
+/**
+ * Creates a calendar ICS file from a personalized plan
+ * @param {string} chatId - The user's chat ID
+ * @param {string} [personalisedPlan] - Optional personalized plan. If not provided, will fetch from user info
+ * @returns {Promise<{success: boolean, message: string, filePath?: string}>} - Result of the operation
+ */
+async function createCalendar(chatId, personalisedPlan) {
+    try {
+        console.log('📤 Starting calendar creation process...');
+        
+        // If no plan provided, get from user info
+        if (!personalisedPlan) {
+            // Get user info and check previous plan
+            const userInfo = await getUserInfo(chatId);
+            personalisedPlan = userInfo?.previous_plan;
+
+            // If no previous plan exists, throw an error
+            if (!personalisedPlan) {
+                console.error('❌ No previous plan found for user');
+                throw new Error('No personalized plan found. Please create a plan first.');
+            }
+        }
+
+        console.log('📤 Sending POST request to multiagent API...');
+        const currentDateTime = new Date().toISOString();
+        const personalised_plan = `Personalised plan: ${personalisedPlan}\nCurrent date and time: ${currentDateTime}`;
+        console.log('📤 Personalised plan:', personalised_plan);
+        const response = await fetch(`${MULTIAGENT_API_URL}/execute/result/67c56384b4a75c480af3b502`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                personalised_plan: String(personalised_plan),
+                webhook: `N/A`
+            }),
+        });
+
+        if (!response.ok) {
+            console.error('❌ API request failed:', response.status, response.statusText);
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const responseData = await response.json();
+        console.log('📥 Received API response:', JSON.stringify(responseData, null, 2));
+
+        if (!responseData.Task_id) {
+            console.error('❌ No Task_id in response:', responseData);
+            throw new Error('No Task_id in response');
+        }
+
+        console.log('✅ Received Task_id:', responseData.Task_id);
+
+        // Poll for the result
+        let result = null;
+        let attempts = 0;
+        const maxAttempts = 10;
+        const pollInterval = 30000;
+
+        console.log('🔄 Starting polling for results...');
+        while (attempts < maxAttempts && !result) {
+            console.log(`📡 Polling attempt ${attempts + 1}/${maxAttempts}`);
+            const resultResponse = await fetch(`${MULTIAGENT_API_URL}/session/result/${responseData.Task_id}`);
+            
+            if (!resultResponse.ok) {
+                console.error('❌ Polling request failed:', resultResponse.status, resultResponse.statusText);
+                throw new Error(`HTTP error! status: ${resultResponse.status}`);
+            }
+
+            const resultData = await resultResponse.json();
+            console.log('📥 Received polling response:', JSON.stringify(resultData, null, 2));
+            
+            if (resultData.status === 'Completed') {
+                console.log('✨ Task completed successfully!');
+                result = resultData.result.result.ics_file;
+                console.log('📥 Received calendar file:', result);
+                break;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+            attempts++;
+        }
+
+        if (!result) {
+            console.error('⏰ Timeout waiting for calendar creation result');
+            throw new Error('Timeout waiting for calendar creation result');
+        }
+
+        // Generate calendar file path
+        const downloadPath = path.join(__dirname, '../../../downloads');
+        if (!fs.existsSync(downloadPath)) {
+            fs.mkdirSync(downloadPath, { recursive: true });
+        }
+
+        const calendarPath = path.join(downloadPath, `${chatId}.ics`);
+
+        // Write calendar data to file
+        fs.writeFileSync(calendarPath, result);
+        console.log('📝 Calendar file saved at:', calendarPath);
+
+        // Schedule file deletion after 1 hour
+        scheduleFileDeletion(calendarPath);
+        console.log('⏱️ Scheduled deletion of calendar file after 1 hour');
+
+        const downloadUrl = `https://${process.env.RENDER_SERVICE_URL}/downloads/${path.basename(calendarPath)}`;
+        console.log('📥 Download URL:', downloadUrl);
+        return {
+            success: true,
+            message: 'Calendar created successfully. File will be deleted after 1 hour.',
+            filePath: downloadUrl
+        };
+
+    } catch (error) {
+        console.error('❌ Error in createCalendar:', error);
+        return {
+            success: false,
+            message: error.message
+        };
     }
-  } else {
-    res.setHeader('Allow', ['POST']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
-  }
 }
 
-async function getUserInfo(chatId) {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?chat_id=eq.${chatId}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-  });
+// Function declaration for LLM tool
+export const createCalendarFunctionDeclaration = {
+    name: 'create_calendar',
+    description: 'Creates a calendar ICS file from a personalized plan',
+    parameters: {
+        type: 'object',
+        properties: {
+            chatId: {
+                type: 'string',
+                description: 'The user\'s chat ID'
+            },
+            personalisedPlan: {
+                type: 'string',
+                description: 'The personalized plan to create a calendar from. If not provided, will fetch from user info.'
+            }
+        },
+        required: ['chatId']
+    }
+};
 
-  const data = await response.json();
-
-  if (data.length > 0) {
-    return data[0]; // Return the first user profile found
-  } else {
-    throw new Error('User profile not found');
-  }
-}
-
-async function handleProfileCreation(chatId) {
-  const userMessage = "CreatePlan"; // Define the message for saving the profile
-
-  // Call saveProfile.js with the user message
-  const response = await fetch(SAVE_PROFILE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      userMessage: userMessage,
-      chatId: chatId,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Failed to save profile: ${error.message}`);
-  }
-
-  // Optionally, you can return a success message or handle it as needed
-  return await response.json();
-}
-
-async function createICSFile(calendarContent) {
-  const icsContent = `
-${calendarContent}
-  `.trim();
-
-  const filePath = join(process.cwd(), 'public', 'calendar.ics'); // Save to public directory
-
-  return new Promise((resolve, reject) => {
-    writeFile(filePath, icsContent, (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(filePath);
-      }
-    });
-  });
-}
+export { createCalendar }; 
