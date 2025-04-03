@@ -9,7 +9,6 @@ const TABLE_NAME = 'user_profiles';
 
 export const getUserInfo = async (chatId) => {
   try {
-    console.log('🔍 Fetching user info for chatId:', chatId);
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .select('*')
@@ -17,11 +16,9 @@ export const getUserInfo = async (chatId) => {
       .single();
 
     if (error) {
-      console.error('❌ Error fetching user info:', error);
       throw error;
     }
 
-    console.log('✅ User info retrieved:', JSON.stringify(data, null, 2));
     return data;
   } catch (error) {
     console.error('❌ Error in getUserInfo:', error);
@@ -31,8 +28,6 @@ export const getUserInfo = async (chatId) => {
 
 export const saveUserInfo = async (chatId, userData) => {
   try {
-    console.log('💾 Saving user info for chatId:', chatId);
-    console.log('📦 User data to save:', JSON.stringify(userData, null, 2));
 
     // First, check if the record exists
     const { data: existingData, error: checkError } = await supabase
@@ -41,8 +36,7 @@ export const saveUserInfo = async (chatId, userData) => {
       .eq('chat_id', chatId)
       .single();
 
-    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-      console.error('❌ Error checking existing user:', checkError);
+    if (checkError && checkError.code !== 'PGRST116') { 
       throw checkError;
     }
 
@@ -59,7 +53,6 @@ export const saveUserInfo = async (chatId, userData) => {
         .single();
 
       if (error) {
-        console.error('❌ Error updating user info:', error);
         throw error;
       }
       result = data;
@@ -75,16 +68,13 @@ export const saveUserInfo = async (chatId, userData) => {
         .single();
 
       if (error) {
-        console.error('❌ Error inserting user info:', error);
         throw error;
       }
       result = data;
     }
 
-    console.log('✅ User info saved successfully:', JSON.stringify(result, null, 2));
     return result;
   } catch (error) {
-    console.error('❌ Error in saveUserInfo:', error);
     throw error;
   }
 };

@@ -2,10 +2,8 @@ const MULTIAGENT_API_URL = 'https://multiagent.aixblock.io/api/v1';
 
 export const createPlan = async (userData) => {
   try {
-    console.log('🚀 Starting createPlan with userData:', JSON.stringify(userData, null, 2));
     
     // First, send the POST request to create the plan
-    console.log('📤 Sending POST request to multiagent API...');
     const response = await fetch(`${MULTIAGENT_API_URL}/execute/result/67c524b951643fd40c0d4d1f`, {
       method: 'POST',
       headers: {
@@ -23,19 +21,14 @@ export const createPlan = async (userData) => {
     });
 
     if (!response.ok) {
-      console.error('❌ API request failed:', response.status, response.statusText);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const responseData = await response.json();
-    console.log('📥 Received API response:', JSON.stringify(responseData, null, 2));
-
     if (!responseData.Task_id) {
-      console.error('❌ No Task_id in response:', responseData);
       throw new Error('No Task_id in response');
     }
 
-    console.log('✅ Received Task_id:', responseData.Task_id);
 
     // Poll for the result
     let result = null;
@@ -43,21 +36,16 @@ export const createPlan = async (userData) => {
     const maxAttempts = 10; // Maximum number of polling attempts
     const pollInterval = 30000; // Poll every 1 minute
 
-    console.log('🔄 Starting polling for results...');
     while (attempts < maxAttempts && !result) {
-      console.log(`📡 Polling attempt ${attempts + 1}/${maxAttempts}`);
       const resultResponse = await fetch(`${MULTIAGENT_API_URL}/session/result/${responseData.Task_id}`);
       
       if (!resultResponse.ok) {
-        console.error('❌ Polling request failed:', resultResponse.status, resultResponse.statusText);
         throw new Error(`HTTP error! status: ${resultResponse.status}`);
       }
 
       const resultData = await resultResponse.json();
-      console.log('📥 Received polling response:', JSON.stringify(resultData, null, 2));
       
       if (resultData.status === 'Completed') {
-        console.log('✨ Task completed successfully!');
         result = resultData.result.result;
         break;
       }
@@ -72,7 +60,6 @@ export const createPlan = async (userData) => {
       throw new Error('Timeout waiting for plan creation result');
     }
 
-    console.log('🎉 Final result:', JSON.stringify(result, null, 2));
     return result;
   } catch (error) {
     console.error('❌ Error in createPlan:', error);

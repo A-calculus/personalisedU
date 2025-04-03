@@ -27,7 +27,6 @@ function scheduleFileDeletion(filePath, delayMs = 3600000) { // Default: 1 hour
         try {
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
-                console.log(`🗑️ Deleted file: ${filePath}`);
             }
             fileDeletionTimers.delete(filePath);
         } catch (error) {
@@ -47,7 +46,6 @@ function scheduleFileDeletion(filePath, delayMs = 3600000) { // Default: 1 hour
  */
 async function createCalendar(chatId, personalisedPlan) {
     try {
-        console.log('📤 Starting calendar creation process...');
         
         // If no plan provided, get from user info
         if (!personalisedPlan) {
@@ -57,15 +55,12 @@ async function createCalendar(chatId, personalisedPlan) {
 
             // If no previous plan exists, throw an error
             if (!personalisedPlan) {
-                console.error('❌ No previous plan found for user');
                 throw new Error('No personalized plan found. Please create a plan first.');
             }
         }
 
-        console.log('📤 Sending POST request to multiagent API...');
         const currentDateTime = new Date().toISOString();
         const personalised_plan = `Personalised plan: ${personalisedPlan}\nCurrent date and time: ${currentDateTime}`;
-        console.log('📤 Personalised plan:', personalised_plan);
         const response = await fetch(`${MULTIAGENT_API_URL}/execute/result/67c56384b4a75c480af3b502`, {
             method: 'POST',
             headers: {
@@ -78,19 +73,15 @@ async function createCalendar(chatId, personalisedPlan) {
         });
 
         if (!response.ok) {
-            console.error('❌ API request failed:', response.status, response.statusText);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const responseData = await response.json();
-        console.log('📥 Received API response:', JSON.stringify(responseData, null, 2));
 
         if (!responseData.Task_id) {
-            console.error('❌ No Task_id in response:', responseData);
             throw new Error('No Task_id in response');
         }
 
-        console.log('✅ Received Task_id:', responseData.Task_id);
 
         // Poll for the result
         let result = null;
@@ -98,23 +89,17 @@ async function createCalendar(chatId, personalisedPlan) {
         const maxAttempts = 10;
         const pollInterval = 30000;
 
-        console.log('🔄 Starting polling for results...');
         while (attempts < maxAttempts && !result) {
-            console.log(`📡 Polling attempt ${attempts + 1}/${maxAttempts}`);
             const resultResponse = await fetch(`${MULTIAGENT_API_URL}/session/result/${responseData.Task_id}`);
             
             if (!resultResponse.ok) {
-                console.error('❌ Polling request failed:', resultResponse.status, resultResponse.statusText);
                 throw new Error(`HTTP error! status: ${resultResponse.status}`);
             }
 
             const resultData = await resultResponse.json();
-            console.log('📥 Received polling response:', JSON.stringify(resultData, null, 2));
             
             if (resultData.status === 'Completed') {
-                console.log('✨ Task completed successfully!');
                 result = resultData.result.result.ics_file;
-                console.log('📥 Received calendar file:', result);
                 break;
             }
 
@@ -123,7 +108,6 @@ async function createCalendar(chatId, personalisedPlan) {
         }
 
         if (!result) {
-            console.error('⏰ Timeout waiting for calendar creation result');
             throw new Error('Timeout waiting for calendar creation result');
         }
 
@@ -137,14 +121,11 @@ async function createCalendar(chatId, personalisedPlan) {
 
         // Write calendar data to file
         fs.writeFileSync(calendarPath, result);
-        console.log('📝 Calendar file saved at:', calendarPath);
 
         // Schedule file deletion after 1 hour
         scheduleFileDeletion(calendarPath);
-        console.log('⏱️ Scheduled deletion of calendar file after 1 hour');
 
         const downloadUrl = `https://${process.env.RENDER_SERVICE_URL}/downloads/${path.basename(calendarPath)}`;
-        console.log('📥 Download URL:', downloadUrl);
         return {
             success: true,
             message: 'Calendar created successfully. File will be deleted after 1 hour.',
