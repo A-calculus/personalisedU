@@ -1,4 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PersonalisedU
+
+AI-Powered Learning Companion built with Next.js.
+
+## Local Development
+
+To run the application locally:
+
+```bash
+# Install dependencies
+npm install
+
+# Run the development server
+npm run dev
+
+# Or build and start for production-like environment
+npm run build && npm start
+```
+
+## Deployment to Render
+
+This application is configured for deployment on Render.
+
+### Automatic Deployment
+
+1. Connect your GitHub repository to Render
+2. Create a new Web Service
+3. Select your repository
+4. Render will automatically detect the `render.yaml` configuration
+
+### Manual Deployment
+
+If you prefer to deploy manually:
+
+1. Create a new Web Service on Render
+2. Connect your GitHub repository
+3. Configure the following settings:
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npm start`
+   - Environment: Node
+   - Health Check Path: `/api/health`
+
+### Environment Variables
+
+Make sure to set the following environment variables in Render:
+
+- `NODE_ENV`: Set to `production`
+- `PORT`: Set to `10000` (or your preferred port)
+- `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
+- `GEMINI_API_KEY`: Your Gemini API key
+- `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+- Any other environment variables your application needs
+
+## Features
+
+- Personalized user experience
+- Telegram bot integration
+- AI-powered responses
+- Calendar creation
+- Plan generation
 
 ## Getting Started
 
