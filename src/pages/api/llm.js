@@ -73,7 +73,7 @@ const handleFunctionCall = async (functionCall, chatId) => {
         return {
           success: true,
           message: `Calendar created successfully. You can download it from: ${result.filePath}`,
-          filePath: result
+          filePath: result.filePath
         };
       } else {
         return {
@@ -99,8 +99,7 @@ const getResponseText = (response) => {
     }
     return 'Sorry, I encountered an error processing the response.';
   } catch (error) {
-    console.error('❌ Error getting response text:', error);
-    return 'Sorry, I encountered an error processing the response.';
+    return 'Sorry, I encountered an error processing the response: ' + error;
   }
 };
 
@@ -160,10 +159,26 @@ export const processMessage = async (message, chatId) => {
 
 
     // Check for function calls in the response
-    if (response.functionCalls && response.functionCalls.length > 0) {
-      
+    const functionCalls = [];
+    
+    // Extract function calls from the response
+    if (response.candidates && response.candidates.length > 0) {
+      const candidate = response.candidates[0];
+      if (candidate.content && candidate.content.parts) {
+        for (const part of candidate.content.parts) {
+          if (part.functionCall) {
+            functionCalls.push({
+              name: part.functionCall.name,
+              args: part.functionCall.args
+            });
+          }
+        }
+      }
+    }
+    
+    if (functionCalls.length > 0) {
       // Process all function calls in parallel
-      const functionCallPromises = response.functionCalls.map(async (functionCall) => {
+      const functionCallPromises = functionCalls.map(async (functionCall) => {
         const result = await handleFunctionCall(functionCall, chatId);
         
         // Add function call and result to context
